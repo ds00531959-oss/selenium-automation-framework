@@ -1,0 +1,4 @@
+{
+  "test_advance_filter.py::test_advance_filter": true,
+  "test_claim_dashboard.py::test_dashboard_counts": true
+}

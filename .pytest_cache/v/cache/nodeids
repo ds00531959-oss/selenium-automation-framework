@@ -1,0 +1,8 @@
+[
+  "test_advance_filter.py::test_advance_filter",
+  "test_claim_dashboard.py::test_dashboard_counts",
+  "test_claim_dashboard.py::test_dashboard_dynamic_counts",
+  "test_claim_dashboard.py::test_dashboard_metrics",
+  "test_claim_dashboard.py::test_filter",
+  "test_login_cases.py::test_login_cases"
+]
