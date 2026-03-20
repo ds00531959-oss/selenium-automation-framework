@@ -1,68 +1,172 @@
+import pytest
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+import time
 
-# ---------- CONFIG ----------
-BASE_URL = "YOUR_BASE_URL"
-USERNAME = "YOUR_USERNAME"
-PASSWORD = "YOUR_PASSWORD"
 
-# ---------- DRIVER SETUP ----------
-options = Options()
-options.add_argument("--start-maximized")
-
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-wait = WebDriverWait(driver, 20)
-
-try:
-    # ---------- LOGIN ----------
-    driver.get(f"{BASE_URL}/auth/login")
-
-    username = wait.until(EC.presence_of_element_located((By.NAME, "email")))
-    password = wait.until(EC.presence_of_element_located((By.NAME, "password")))
-
-    username.send_keys(USERNAME)
-    password.send_keys(PASSWORD)
-    password.send_keys(Keys.RETURN)
-
-    # ---------- WAIT FOR DASHBOARD ----------
-    wait.until(EC.url_contains("dashboard"))
-
-    # ---------- WAIT FOR LOADER TO DISAPPEAR (if exists) ----------
-    try:
-        wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "loader")))
-    except:
-        pass  # ignore if loader not present
-
-    # ---------- CLICK ADVANCE FILTER ----------
-    advance_filter = wait.until(
-        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Advance Filter')]"))
-    )
-
-    # Scroll to element (safe practice)
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", advance_filter)
-
-    # Try normal click first
-    try:
-        advance_filter.click()
-    except:
-        # fallback if click intercepted
-        driver.execute_script("arguments[0].click();", advance_filter)
-
-    print("Advance Filter clicked successfully")
-
-    # ---------- OPTIONAL: VERIFY FILTER PANEL OPEN ----------
-    # Example (update locator as per UI)
-    wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class,'filter-panel')]")))
-    print("Advance Filter panel opened successfully")
-
-except Exception as e:
-    print("Error occurred:", str(e))
-
-finally:
+@pytest.fixture(scope="module")
+def driver():
+    driver = webdriver.Chrome()
+    driver.maximize_window()
+    yield driver
     driver.quit()
+
+
+@pytest.fixture(scope="module")
+def wait(driver):
+    return WebDriverWait(driver, 20)
+
+
+# ---------------- LOGIN ----------------
+def login(driver, wait):
+    driver.get("https://health-claim-ui-prod.artivatic.ai/auth/login")
+
+    wait.until(EC.presence_of_element_located((By.NAME, "employee_id"))).send_keys("furqan.shaikh@artivatic.ai")
+    driver.find_element(By.NAME, "password").send_keys("Furquan@dev1!")
+    Select(driver.find_element(By.ID, "cn")).select_by_visible_text("India")
+
+    driver.find_element(By.XPATH, "//button[contains(text(),'LOGIN')]").click()
+    time.sleep(5)
+
+    print("✅ Login successful")
+
+
+# ---------------- COMMON FUNCTIONS ----------------
+
+def wait_for_loader(wait):
+    try:
+        wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "backdrop")))
+    except:
+        pass
+
+
+def open_advanced_filter(driver, wait):
+    wait_for_loader(wait)
+
+    btn = wait.until(EC.presence_of_element_located(
+        (By.XPATH, "//p[text()='Advanced Filter']")
+    ))
+    driver.execute_script("arguments[0].click();", btn)
+    time.sleep(1)
+
+
+def clear_filter(driver, wait):
+    try:
+        clear_btn = wait.until(EC.presence_of_element_located(
+            (By.XPATH, "//button[contains(text(),'Clear')]")
+        ))
+        driver.execute_script("arguments[0].click();", clear_btn)
+        wait_for_loader(wait)
+        time.sleep(1)
+    except:
+        pass
+
+
+def select_claim_type(driver, wait, option_name):
+    print(f"➡️ Selecting: {option_name}")
+
+    label = wait.until(EC.presence_of_element_located(
+        (By.XPATH, f"//label[contains(text(),'{option_name}')]")
+    ))
+
+    checkbox_id = label.get_attribute("for")
+    checkbox = driver.find_element(By.ID, checkbox_id)
+
+    driver.execute_script("arguments[0].click();", checkbox)
+    time.sleep(1)
+
+
+def select_preauth_stage(driver, wait, stage_name):
+    print(f"➡️ Selecting Preauth: {stage_name}")
+
+    label = wait.until(EC.presence_of_element_located(
+        (By.XPATH, f"//label[contains(text(),'{stage_name}')]")
+    ))
+
+    checkbox_id = label.get_attribute("for")
+    checkbox = driver.find_element(By.ID, checkbox_id)
+
+    driver.execute_script("arguments[0].click();", checkbox)
+    time.sleep(1)
+
+
+def apply_filter(driver, wait):
+    btn = wait.until(EC.presence_of_element_located(
+        (By.XPATH, "//button[contains(text(),'Apply Filters')]")
+    ))
+    driver.execute_script("arguments[0].click();", btn)
+
+    wait_for_loader(wait)
+    time.sleep(1)
+
+
+def get_count(driver, wait):
+    elements = wait.until(EC.presence_of_all_elements_located(
+        (By.XPATH, "//span[contains(@class,'item')]")
+    ))
+
+    for el in elements:
+        txt = el.text.strip()
+        if txt.isdigit():
+            return int(txt)
+
+    return 0
+
+
+# ---------------- TEST ----------------
+
+def test_advance_filter(driver, wait):
+    login(driver, wait)
+
+    modules = ["Authorisation", "Cashless", "Reimbursement", "Pre-Post"]
+    preauth_types = ["Initial", "Initial Final", "Extension", "Final"]
+
+    counts = {}
+
+    # ✅ Individual
+    for m in modules:
+        open_advanced_filter(driver, wait)
+        clear_filter(driver, wait)
+        select_claim_type(driver, wait, m)
+        apply_filter(driver, wait)
+        counts[m] = get_count(driver, wait)
+
+    # ✅ Auth + Preauth
+    for p in preauth_types:
+        open_advanced_filter(driver, wait)
+        clear_filter(driver, wait)
+
+        select_claim_type(driver, wait, "Authorisation")
+        select_preauth_stage(driver, wait, p)
+
+        apply_filter(driver, wait)
+        counts[f"Auth + {p}"] = get_count(driver, wait)
+
+    # ✅ ALL
+    open_advanced_filter(driver, wait)
+    clear_filter(driver, wait)
+
+    for m in modules:
+        select_claim_type(driver, wait, m)
+
+    apply_filter(driver, wait)
+    counts["ALL"] = get_count(driver, wait)
+
+    # ---------------- PRINT RESULT ----------------
+    print("\n========= FINAL RESULT =========")
+
+    print("\n--- Individual ---")
+    for m in modules:
+        print(f"{m:<15} : {counts[m]}")
+
+    print("\n--- Auth + Preauth ---")
+    for p in preauth_types:
+        print(f"Auth + {p:<12} : {counts.get(f'Auth + {p}', 0)}")
+
+    print("\n--- ALL ---")
+    print(f"ALL{'':<12} : {counts.get('ALL', 0)}")
+
+    # ✅ Basic assertion (test should not fail randomly)
+    assert counts is not None

@@ -13,31 +13,29 @@ def driver():
     driver.quit()
 
 
-def test_login_cases(driver):
+def test_login(driver):
 
-    test_cases = [
-        ("furqan.shaikh@artivatic.ai","wrongpass"),
-        ("wronguser@test.com","Furquan@dev1!"),
-        ("wronguser@test.com","wrongpass"),
-        ("furqan.shaikh@artivatic.ai","Furquan@dev1!")
-    ]
+    driver.get("https://health-claim-ui-prod.artivatic.ai/auth/login")
+    time.sleep(3)
 
-    for email,password in test_cases:
+    # ---------- USERNAME ----------
+    driver.find_element(By.ID, "empId").send_keys("processingteam@insurer.com")
 
-        driver.get("https://health-claim-ui-prod.artivatic.ai/auth/login")
-        time.sleep(5)
+    # ---------- PASSWORD ----------
+    driver.find_element(By.ID, "password").send_keys("Admin@123")
 
-        driver.find_element(By.ID,"empId").send_keys(email)
+    # ---------- COUNTRY ----------
+    Select(driver.find_element(By.ID, "cn")).select_by_visible_text("India")
 
-        driver.find_element(By.ID,"password").send_keys(password)
+    print("✅ India Selected")
 
-        Select(driver.find_element(By.ID,"cn")).select_by_visible_text("India")
+    # ---------- LOGIN ----------
+    driver.find_element(By.XPATH, "//button[contains(text(),'LOGIN')]").click()
 
-        driver.find_element(By.XPATH,"//button[contains(text(),'LOGIN')]").click()
+    time.sleep(3)
+    print("Current URL:", driver.current_url)
 
-        time.sleep(3)
+    # ---------- ASSERT ----------
+    assert "dashboard" in driver.current_url, "❌ Login Failed"
 
-        print("Test executed for:", email, password)
-
-        # simple assertion
-        assert driver.current_url is not None
+    print("🎉 LOGIN TEST PASSED")
